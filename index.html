@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ExprPlot</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>ExprPlot</h1>
+    <button id="theme-toggle" title="Toggle theme">🌙</button>
+  </header>
+
+  <canvas id="plot"></canvas>
+
+  <div class="bottom-bar">
+    <label for="expr">Expression</label>
+    <input
+      type="text"
+      id="expr"
+      placeholder="e.g. 3x - 5, x^2 + 2, 2x + y = 6"
+      autocomplete="off"
+      spellcheck="false"
+      value="3x"
+    >
+    <div id="result"></div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

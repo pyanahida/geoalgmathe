@@ -1,0 +1,133 @@
+:root {
+  --bg: #0a0a0f;
+  --fg: #e0e0e0;
+  --accent: #00ffcc;
+  --axis: #00ffcc;
+  --grid: rgba(0, 255, 204, .08);
+  --panel: rgba(17, 17, 24, .92);
+  --border: #333;
+  --muted: #666;
+  --error: #ff5577;
+}
+
+body.light {
+  --bg: #f5f5f8;
+  --fg: #1a1a2e;
+  --accent: #0a84ff;
+  --axis: #0a84ff;
+  --grid: rgba(10, 132, 255, .08);
+  --panel: rgba(255, 255, 255, .94);
+  --border: #ccc;
+  --muted: #888;
+  --error: #d70015;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Courier New', monospace;
+  background: var(--bg);
+  color: var(--fg);
+  height: 100vh;
+  overflow: hidden;
+  transition: background .3s, color .3s;
+}
+
+header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 20px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+h1 {
+  font-size: 1.6rem;
+  color: var(--accent);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 40%, transparent);
+  transition: color .3s, text-shadow .3s;
+}
+
+#theme-toggle {
+  position: fixed;
+  top: 12px; right: 16px;
+  width: 40px; height: 40px;
+  font-size: 1.2rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .3s, border-color .3s;
+}
+
+#theme-toggle:hover {
+  border-color: var(--accent);
+}
+
+canvas {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw;
+  height: 100vh;
+  cursor: grab;
+  touch-action: none;
+  z-index: 1;
+}
+
+canvas.dragging {
+  cursor: grabbing;
+}
+
+.bottom-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  z-index: 10;
+  transition: background .3s, border-color .3s;
+}
+
+label {
+  font-size: .8rem;
+  color: var(--muted);
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 1.3rem;
+  font-family: inherit;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--accent);
+  outline: none;
+  transition: border-color .2s, color .3s;
+}
+
+input[type="text"]:focus {
+  border-color: var(--accent);
+}
+
+#result {
+  min-height: 18px;
+  font-size: .85rem;
+  color: var(--accent);
+  transition: color .3s;
+}
+
+#result.error {
+  color: var(--error);
+}
