@@ -1,208 +1,121 @@
 import { parseExpression } from './parser.js';
-import { plot, setViewport, getViewport } from './plotter.js';
+import { evaluate } from './evaluator.js';
+import { drawPlot } from './plotter.js';
 
 const input = document.getElementById('expr');
 const resultEl = document.getElementById('result');
 const canvas = document.getElementById('plot');
 const themeBtn = document.getElementById('theme-toggle');
 
-let currentAST = null;
+let currentExprFn = null;
+let viewportState = { panX: 0, panY: 0, scale: 50 };
+let theme = document.body.classList.contains('light') ? 'light' : 'dark';
 
-// ---- Canvas 尺寸 ----
-function resizeCanvas() {
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.round(window.innerWidth * dpr);
-  canvas.height = Math.round(window.innerHeight * dpr);
-}
-
-// ---- 渲染 ----
 function render() {
   const expr = input.value.trim();
   resultEl.classList.remove('error');
-
   if (!expr) {
-    currentAST = null;
-    plot(canvas, null);
+    currentExprFn = null;
+    drawPlot(canvas, null, viewportState, theme);
     resultEl.textContent = '';
     return;
   }
-
   try {
-    let actualExpr = expr;
-    if (/^y\s*=?\s*/i.test(expr)) {
-      actualExpr = expr.replace(/^y\s*=\s*/, '');
-    }
-
-    currentAST = parseExpression(actualExpr);
-    plot(canvas, currentAST);
+    const ast = parseExpression(expr);
+    currentExprFn = x => {
+      const result = evaluate(ast, { x });
+      return result && typeof result.toNumber === 'function'
+        ? result.toNumber()
+        : Number(result);
+    };
+    drawPlot(canvas, currentExprFn, viewportState, theme);
     resultEl.textContent = '✓ parsed & plotted';
   } catch (e) {
     resultEl.textContent = `✗ ${e.message}`;
     resultEl.classList.add('error');
+    console.error('[main] render error:', e);
   }
 }
 
-// ---- 坐标转换 ----
-function pxToMathX(px) {
-  const { xMin, xMax } = getViewport();
-  return xMin + (px / canvas.width) * (xMax - xMin);
-}
-function pxToMathY(py) {
-  const { yMin, yMax } = getViewport();
-  return yMin + ((canvas.height - py) / canvas.height) * (yMax - yMin);
-}
-
-// ---- 拖拽平移（桌面 + 手机单指） ----
-let dragging = false;
-let lastX = 0, lastY = 0;
-
-canvas.addEventListener('pointerdown', (e) => {
-  // 只响应单指/鼠标左键
-  if (e.pointerType === 'touch' && e.isPrimary === false) return;
-  dragging = true;
-  canvas.classList.add('dragging');
-  lastX = e.clientX;
-  lastY = e.clientY;
-  // 不再调用 setPointerCapture
-});
-
-canvas.addEventListener('pointermove', (e) => {
-  if (!dragging) return;
-
-  const dxPx = e.clientX - lastX;
-  const dyPx = e.clientY - lastY;
-  lastX = e.clientX;
-  lastY = e.clientY;
-
-  const { xMin, xMax, yMin, yMax } = getViewport();
-  const dxMath = (dxPx / canvas.width) * (xMax - xMin);
-  const dyMath = (dyPx / canvas.height) * (yMax - yMin);
-
-  setViewport({
-    xMin: xMin - dxMath,
-    xMax: xMax - dxMath,
-    yMin: yMin + dyMath,
-    yMax: yMax + dyMath
-  });
-
-  render();
-});
-
-canvas.addEventListener('pointerup', () => {
-  dragging = false;
-  canvas.classList.remove('dragging');
-});
-
-canvas.addEventListener('pointercancel', () => {
-  dragging = false;
-  canvas.classList.remove('dragging');
-});
-
-// ---- 滚轮缩放（桌面） ----
-canvas.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  const factor = e.deltaY < 0 ? 0.9 : 1.1;
-  applyZoom(factor, e.clientX, e.clientY);
-}, { passive: false });
-
-// ---- 手机双指缩放 ----
-let touchDist = 0;
-let touchCenter = null;
-
-canvas.addEventListener('touchstart', (e) => {
-  if (e.touches.length === 2) {
-    // 双指：取消拖拽，记录初始距离和中心
-    dragging = false;
-    canvas.classList.remove('dragging');
-
-    const t1 = e.touches[0];
-    const t2 = e.touches[1];
-    touchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-    touchCenter = {
-      x: (t1.clientX + t2.clientX) / 2,
-      y: (t1.clientY + t2.clientY) / 2
-    };
-  }
-}, { passive: true });
-
-canvas.addEventListener('touchmove', (e) => {
-  if (e.touches.length === 2) {
-    e.preventDefault(); // 阻止浏览器默认行为
-    const t1 = e.touches[0];
-    const t2 = e.touches[1];
-    const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-
-    if (touchDist > 0) {
-      const scale = dist / touchDist;
-      const factor = 1 / scale;
-
-      // 以双指中心为锚点
-      const center = {
-        x: (t1.clientX + t2.clientX) / 2,
-        y: (t1.clientY + t2.clientY) / 2
-      };
-
-      applyZoomAt(factor, center.x, center.y);
-      touchDist = dist;
-    }
-  }
-}, { passive: false });
-
-canvas.addEventListener('touchend', (e) => {
-  if (e.touches.length < 2) {
-    touchDist = 0;
-    touchCenter = null;
-  }
-});
-
-// ---- 缩放逻辑 ----
-function applyZoom(factor, clientX, clientY) {
+function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
-  const px = clientX * dpr;
-  const py = clientY * dpr;
-  applyZoomAt(factor, px, py);
-}
-
-function applyZoomAt(factor, px, py) {
-  const { xMin, xMax, yMin, yMax } = getViewport();
-
-  const mx = pxToMathX(px);
-  const my = pxToMathY(py);
-
-  setViewport({
-    xMin: mx - (mx - xMin) * factor,
-    xMax: mx + (xMax - mx) * factor,
-    yMin: my - (my - yMin) * factor,
-    yMax: my + (yMax - my) * factor
-  });
-
+  const cssW = canvas.clientWidth;
+  const cssH = canvas.clientHeight;
+  if (canvas.width === cssW * dpr && canvas.height === cssH * dpr) return;
+  canvas.width = cssW * dpr;
+  canvas.height = cssH * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   render();
 }
 
-// ---- 日夜模式 ----
-function toggleTheme() {
-  const isLight = document.body.classList.toggle('light');
-  themeBtn.textContent = isLight ? '☀️' : '🌙';
-  try { localStorage.setItem('theme', isLight ? 'light' : 'dark'); } catch {}
-  render(); // 重绘以更新轴线颜色
-}
+// ---- 拖拽 ----
+let dragging = false, lastX = 0, lastY = 0, activePointerId = null;
 
-const savedTheme = (() => { try { return localStorage.getItem('theme'); } catch { return null; } })();
-if (savedTheme === 'light') {
-  document.body.classList.add('light');
-  themeBtn.textContent = '☀️';
-}
+canvas.addEventListener('pointerdown', e => {
+  dragging = true;
+  activePointerId = e.pointerId;
+  lastX = e.clientX;
+  lastY = e.clientY;
+  canvas.setPointerCapture(e.pointerId);
+});
 
-themeBtn.addEventListener('click', toggleTheme);
-
-// ---- 事件绑定 ----
-input.addEventListener('input', render);
-
-window.addEventListener('resize', () => {
-  resizeCanvas();
+canvas.addEventListener('pointermove', e => {
+  if (!dragging || e.pointerId !== activePointerId) return;
+  const dx = e.clientX - lastX;
+  const dy = e.clientY - lastY;
+  lastX = e.clientX;
+  lastY = e.clientY;
+  viewportState.panX -= dx / viewportState.scale;
+  viewportState.panY += dy / viewportState.scale;
   render();
 });
+
+const endDrag = e => {
+  if (e.pointerId !== activePointerId) return;
+  dragging = false;
+  activePointerId = null;
+  try { canvas.releasePointerCapture(e.pointerId); } catch {}
+};
+
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+// ---- 缩放（围绕鼠标位置） ----
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left;
+  const cy = e.clientY - rect.top;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+
+  const factor = e.deltaY < 0 ? 1.1 : 0.9;
+  const oldScale = viewportState.scale;
+  const newScale = oldScale * factor;
+
+  // 鼠标对应的数学坐标（与 plotter.js 公式一致）
+  const mx = (cx - w / 2 - viewportState.panX) / oldScale;
+  const my = (h / 2 + viewportState.panY - cy) / oldScale;
+
+  // 调整 pan 使鼠标位置不变
+  viewportState.panX = cx - w / 2 - mx * newScale;
+  viewportState.panY = my * newScale + cy - h / 2;
+  viewportState.scale = newScale;
+
+  render();
+}, { passive: false });
+
+// ---- 主题 ----
+themeBtn.addEventListener('click', () => {
+  document.body.classList.toggle('light');
+  theme = document.body.classList.contains('light') ? 'light' : 'dark';
+  themeBtn.textContent = theme === 'light' ? '☀️' : '🌙';
+  render();
+});
+
+input.addEventListener('input', render);
+window.addEventListener('resize', resizeCanvas);
 
 // ---- 初始化 ----
 resizeCanvas();
-render();

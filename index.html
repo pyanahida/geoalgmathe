@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>ExprPlot</title>
+  <title>GeoAlgMathe</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <h1>ExprPlot</h1>
+    <h1>GeoAlgMathe</h1>
     <button id="theme-toggle" title="Toggle theme">🌙</button>
   </header>
 
@@ -19,7 +19,7 @@
     <input
       type="text"
       id="expr"
-      placeholder="e.g. 3x - 5, x^2 + 2, 2x + y = 6"
+      placeholder="e.g. 3x, x^2 + 2, y - 3x = 5"
       autocomplete="off"
       spellcheck="false"
       value="3x"
@@ -27,6 +27,41 @@
     <div id="result"></div>
   </div>
 
-  <script type="module" src="main.js"></script>
+  <script type="module">
+    window.addEventListener('DOMContentLoaded', () => {
+      try {
+        console.log('[bootstrap] DOM ready, loading main.js...');
+
+        // 页面可见错误报告：兜底用，确保控制台关闭时用户也能看到
+        function reportError(msg, err) {
+          const el = document.getElementById('result');
+          if (el) {
+            el.textContent = '✗ ' + msg;
+            el.classList.add('error');
+          }
+          // 同时打控制台
+          console.error('[bootstrap]', msg, err);
+          if (err && err.stack) console.error('[bootstrap] stack:', err.stack);
+        }
+
+        import('./main.js')
+          .then(() => {
+            console.log('[bootstrap] main.js loaded successfully');
+          })
+          .catch(err => {
+            reportError('Failed to load/execute main.js: ' + (err && err.message), err);
+          });
+      } catch (err) {
+        // 同步兜底
+        const el = document.getElementById('result');
+        if (el) {
+          el.textContent = '✗ Critical error: ' + (err && err.message);
+          el.classList.add('error');
+        }
+        console.error('[bootstrap] critical sync error:', err);
+        if (err && err.stack) console.error('[bootstrap] stack:', err.stack);
+      }
+    });
+  </script>
 </body>
 </html>
