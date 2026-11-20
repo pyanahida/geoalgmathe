@@ -1,25 +1,29 @@
 import { evaluateY } from './evaluator.js';
 
+function formatNum(v) {
+  if (typeof v !== 'number') return String(v);
+  if (Number.isInteger(v)) return String(v);
+  return v.toFixed(2).replace(/\.?0+$/, '');
+}
+
 function getColors(theme) {
   return theme === 'light'
     ? { bg: '#f5f5f8', axis: '#1a1a2e', grid: '#dcdce0', line: '#0a84ff', tick: '#1a1a2e', point: '#ff3b30' }
     : { bg: '#0a0a0f', axis: '#00ffcc', grid: '#1f2a2e', line: '#00ffcc', tick: '#00ffcc', point: '#ff5577' };
 }
 
-export function drawPlot(canvas, exprFn, viewportState, theme, intersections = []) {
+export function drawPlot(canvas, normalFns, astList, viewportState, theme, intersections = []) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const colors = getColors(theme);
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
-
   if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
     canvas.width = w * dpr;
     canvas.height = h * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
-
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = colors.bg;
   ctx.fillRect(0, 0, w, h);
@@ -92,90 +96,77 @@ export function drawPlot(canvas, exprFn, viewportState, theme, intersections = [
     }
   }
 
-  // ---- 曲线（✅ 修复：每个 y 分支独立 beginPath） ----
-  const ast = window._currentAST_;
-  if (exprFn && ast) {
+  // ---- 普通函数 ----
+  const steps = Math.min(w * 2, 600);
+  const dx = (xMax - xMin) / steps;
+  if (normalFns && normalFns.length) {
     ctx.strokeStyle = colors.line;
     ctx.lineWidth = 2.5;
-    const steps = Math.min(w * 2, 1200);
-    const dx = (xMax - xMin) / steps;
+    for (const fn of normalFns) {
+      ctx.beginPath();
+      let started = false;
+      for (let i = 0; i <= steps; i++) {
+        const x = xMin + i * dx;
+        let y;
+        try { y = fn(x); } catch { started = false; continue; }
+        if (typeof y !== 'number' || !isFinite(y)) { started = false; continue; }
+        const px = ((x - xMin) / (xMax - xMin)) * w;
+        const py = h - ((y - yMin) / (yMax - yMin)) * h;
+        if (!started) { ctx.moveTo(px, py); started = true; }
+        else ctx.lineTo(px, py);
+      }
+      if (started) ctx.stroke();
+    }
+  }
 
-    for (let i = 0; i <= steps; i++) {
-      const x = xMin + i * dx;
-      let res;
-      try { res = evaluateY(ast, x); }
-      catch { continue; }
-      if (!res) continue;
-
-      if (res.type === 'vertical') {
-        const px = ((res.x - xMin) / (xMax - xMin)) * w;
-        ctx.beginPath();
-        ctx.moveTo(px, 0);
-        ctx.lineTo(px, h);
-        ctx.stroke();
-      } else if (res.type === 'function') {
-        // ✅ 修复核心：每个 y 值独立画一条连续曲线
-        for (let bi = 0; bi < res.ys.length; bi++) {
-          const y = res.ys[bi];
-          if (typeof y !== 'number' || !isFinite(y)) continue;
-          const px = ((x - xMin) / (xMax - xMin)) * w;
-          const py = h - ((y - yMin) / (yMax - yMin)) * h;
-
-          // ✅ 每个分支维护独立的子路径
+  // ---- AST 模式 ----
+  if (astList && astList.length) {
+    ctx.strokeStyle = colors.line;
+    ctx.lineWidth = 2.5;
+    for (const ast of astList) {
+      for (let i = 0; i <= steps; i++) {
+        const x = xMin + i * dx;
+        let res;
+        try { res = evaluateY(ast, x); } catch { continue; }
+        if (!res) continue;
+        if (res.type === 'vertical') {
+          const px = ((res.x - xMin) / (xMax - xMin)) * w;
           ctx.beginPath();
-          ctx.moveTo(px, py);
-
-          // 往回补连前一个点（同分支）
-          if (i > 0) {
-            const prevX = x - dx;
-            let prevRes;
-            try { prevRes = evaluateY(ast, prevX); }
-            catch { continue; }
-            if (prevRes && prevRes.type === 'function' && prevRes.ys[bi] !== undefined) {
-              const prevY = prevRes.ys[bi];
-              if (typeof prevY === 'number' && isFinite(prevY)) {
-                const ppx = ((prevX - xMin) / (xMax - xMin)) * w;
-                const ppy = h - ((prevY - yMin) / (yMax - yMin)) * h;
-                ctx.moveTo(ppx, ppy);
-                ctx.lineTo(px, py);
-              }
-            }
+          ctx.moveTo(px, 0);
+          ctx.lineTo(px, h);
+          ctx.stroke();
+        } else if (res.type === 'function') {
+          for (const y of res.ys) {
+            if (typeof y !== 'number' || !isFinite(y)) continue;
+            const px = ((x - xMin) / (xMax - xMin)) * w;
+            const py = h - ((y - yMin) / (yMax - yMin)) * h;
+            if (i === 0) { ctx.beginPath(); ctx.moveTo(px, py); }
+            else ctx.lineTo(px, py);
           }
           ctx.stroke();
         }
       }
     }
-  } else if (exprFn) {
-    // 普通函数（无 AST，走 exprFn 回调）
-    ctx.strokeStyle = colors.line;
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    const steps = Math.min(w * 2, 1200);
-    const dx = (xMax - xMin) / steps;
-    let started = false;
-    for (let i = 0; i <= steps; i++) {
-      const x = xMin + i * dx;
-      let y;
-      try { y = exprFn(x); }
-      catch { started = false; continue; }
-      if (typeof y !== 'number' || !isFinite(y)) { started = false; continue; }
-      const px = ((x - xMin) / (xMax - xMin)) * w;
-      const py = h - ((y - yMin) / (yMax - yMin)) * h;
-      if (!started) { ctx.moveTo(px, py); started = true; }
-      else ctx.lineTo(px, py);
-    }
-    ctx.stroke();
   }
 
   // ---- 交点标记 ----
   if (intersections.length) {
     ctx.fillStyle = colors.point;
+    ctx.font = 'bold 12px Courier New';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
     for (const p of intersections) {
-      const px = ((p.x - xMin) / (xMax - xMin)) * w;
-      const py = h - ((p.y - yMin) / (yMax - yMin)) * h;
+      // ✅ 修复：-0 显示为 0
+      const rx = p.x === 0 ? 0 : p.x;
+      const ry = p.y === 0 ? 0 : p.y;
+      const px = ((rx - xMin) / (xMax - xMin)) * w;
+      const py = h - ((ry - yMin) / (yMax - yMin)) * h;
       ctx.beginPath();
       ctx.arc(px, py, 5, 0, Math.PI * 2);
       ctx.fill();
+      const label = `(${formatNum(rx)}, ${formatNum(ry)})`;
+      ctx.fillStyle = colors.point;
+      ctx.fillText(label, px + 8, py - 8);
     }
   }
 }

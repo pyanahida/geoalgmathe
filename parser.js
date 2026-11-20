@@ -110,8 +110,7 @@ function tokenizeForY(input) {
       default: i++;
     }
   }
-
-  // ✅ 关键修复：补上隐式乘号（跟 tokenize 里一样的逻辑）
+  // ✅ 隐式乘号补全
   for (let j = 0; j < tokens.length - 1; j++) {
     const cur = tokens[j];
     const nxt = tokens[j + 1];
@@ -124,7 +123,6 @@ function tokenizeForY(input) {
       j++;
     }
   }
-
   tokens.push({ type: T.EOF });
   return tokens;
 }
@@ -233,7 +231,6 @@ export function parseExpression(input) {
   return parse(tokens);
 }
 
-// ✅ 保留原始 AST（用于垂直/多值方程）
 export function parseEquationAST(input) {
   const s = input.replace(/\s+/g, '');
   const tokens = [];
@@ -262,8 +259,6 @@ export function parseEquationAST(input) {
       default: i++;
     }
   }
-
-  // ✅ 同样补上隐式乘号
   for (let j = 0; j < tokens.length - 1; j++) {
     const cur = tokens[j];
     const nxt = tokens[j + 1];
@@ -276,9 +271,7 @@ export function parseEquationAST(input) {
       j++;
     }
   }
-
   tokens.push({ type: T.EOF });
-
   let eqIdx = -1;
   for (let k = 0; k < tokens.length; k++) {
     if (tokens[k].type === T.EQ) { eqIdx = k; break; }

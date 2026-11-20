@@ -1,5 +1,3 @@
-// 分数系统 —— 避免浮点误差
-// Frac(numerator, denominator)
 export class Frac {
   constructor(num, den = 1) {
     if (den === 0) throw new Error('分母不能为零');
@@ -9,17 +7,11 @@ export class Frac {
   }
   add(other) {
     const o = toFrac(other);
-    return new Frac(
-      this.num * o.den + o.num * this.den,
-      this.den * o.den
-    );
+    return new Frac(this.num * o.den + o.num * this.den, this.den * o.den);
   }
   sub(other) {
     const o = toFrac(other);
-    return new Frac(
-      this.num * o.den - o.num * this.den,
-      this.den * o.den
-    );
+    return new Frac(this.num * o.den - o.num * this.den, this.den * o.den);
   }
   mul(other) {
     const o = toFrac(other);
@@ -35,13 +27,12 @@ export class Frac {
     }
     return Math.pow(this.toNumber(), n);
   }
-  // ✅ 新增：平方根（无理数）
   sqrt() {
     const v = this.toNumber();
     if (v < 0) throw new Error('负数不能开平方');
     const r = Math.sqrt(v);
     if (Number.isInteger(r)) return new Frac(r, 1);
-    return r; // 返回浮点（无理数）
+    return r;
   }
   abs() {
     return new Frac(Math.abs(this.num), this.den);
@@ -65,7 +56,7 @@ export function toFrac(val) {
   return decimalToFrac(val);
 }
 
-export function decimalToFrac(dec, maxDen = 1000000) {
+export function decimalToFrac(dec, maxDen = 10000) {
   if (Number.isInteger(dec)) return new Frac(dec, 1);
   const sign = dec < 0 ? -1 : 1;
   dec = Math.abs(dec);

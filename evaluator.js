@@ -62,28 +62,22 @@ export function evaluate(ast, vars = {}) {
 }
 
 /**
- * ✅ 新接口：支持垂直/多值方程
- * 返回: null | number | [number, number]
+ * ✅ 判断表达式类型，不逐点调用，只在交点计算时用
  */
 export function evaluateY(ast, x) {
   const expr = ast;
-
-  // ✅ x = 常数
+  // x = 常数
   if (expr.type === 'Binary' && expr.op === 'EQ') {
-    const isXConst = (n) =>
-      n.type === 'Var' && n.name === 'x';
-    const isConst = (n) =>
-      n.type === 'Frac' || n.type === 'Num';
-
+    const isXConst = (n) => n.type === 'Var' && n.name === 'x';
+    const isConst = (n) => n.type === 'Frac' || n.type === 'Num';
     if (isXConst(expr.left) && isConst(expr.right)) {
-      return { type: 'vertical', x: evaluate(expr.right) };
+      return { type: 'vertical', x: evaluate(expr.right).toNumber() };
     }
     if (isXConst(expr.right) && isConst(expr.left)) {
-      return { type: 'vertical', x: evaluate(expr.left) };
+      return { type: 'vertical', x: evaluate(expr.left).toNumber() };
     }
   }
-
-  // ✅ y^2 = ...
+  // y^2 = ...
   if (expr.type === 'Binary' && expr.op === 'EQ') {
     const left = expr.left;
     if (
@@ -98,11 +92,11 @@ export function evaluateY(ast, x) {
       let v;
       try { v = toFrac(rhs).sqrt(); }
       catch { return null; }
-      return { type: 'function', ys: [-v.toNumber(), v.toNumber()] };
+      const num = typeof v === 'number' ? v : v.toNumber();
+      return { type: 'function', ys: [-num, num] };
     }
   }
-
-  // ✅ 普通 y = f(x)
+  // 普通 y = f(x)
   try {
     const y = evaluate(expr, { x });
     return { type: 'function', ys: [y.toNumber()] };
